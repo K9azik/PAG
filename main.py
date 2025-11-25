@@ -1,8 +1,10 @@
 import arcpy
 import math
-import pickle
 import os
-# dotenv.load_dotenv()
+import dotenv
+from arcpy import SpatialReference
+
+dotenv.load_dotenv()
 
 #####słownik do heurystyki#####
 Vs = {
@@ -83,8 +85,53 @@ class GraphCreator:
         if direction in (0, 2):
             n2.edges.append((e, n1))
 
-
-
+    def find_closest_nodes(self, point1, point2):
+        def transform_point(point):
+            wgs84 = SpatialReference(4326)
+            target_sr = SpatialReference(2180)
+            
+            point_geom = arcpy.PointGeometry(
+                arcpy.Point(point[0], point[1]), 
+                wgs84
+            )
+            
+            projected_point = point_geom.projectAs(target_sr)
+            return (projected_point.firstPoint.X, projected_point.firstPoint.Y)
+            
+        def distance(p1, p2):
+            return ((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)**0.5
+        
+        transformed_p1 = transform_point(point1)
+        transformed_p2 = transform_point(point2)
+        
+        closest_to_p1 = None
+        closest_to_p2 = None
+        min_dist1 = float('inf')
+        min_dist2 = float('inf')
+        
+        for node_id, node in self.graph.nodes.items():
+            node_point = (node.x, node.y)
+            
+            dist1 = distance(transformed_p1, node_point)
+            if dist1 < min_dist1:
+                min_dist1 = dist1
+                closest_to_p1 = node_id
+                
+            dist2 = distance(transformed_p2, node_point)
+            if dist2 < min_dist2:
+                min_dist2 = dist2
+                closest_to_p2 = node_id
+        
+        print(f"\nFound closest nodes:")
+        if closest_to_p1:
+            node1 = self.graph.nodes[closest_to_p1]
+            print(f"For point 1: Node {closest_to_p1} at ({node1.x}, {node1.y})")
+        if closest_to_p2:
+            node2 = self.graph.nodes[closest_to_p2]
+            print(f"For point 2: Node {closest_to_p2} at ({node2.x}, {node2.y})")
+        
+        return closest_to_p1, closest_to_p2
+    
 def dijkstra(graph, start_id, end_id):
     # init
     S = set()  # odwiedzone
@@ -267,6 +314,7 @@ def astar(graph, start_id, end_id):
 def create_graph(workspace, layer):
     gc = GraphCreator()
     arcpy.env.workspace = workspace
+    
     fields = ['FID', 'SHAPE@', 'KLASA_DROG', 'DIRECTION']
     with arcpy.da.SearchCursor(layer, fields) as cursor:
         for row in cursor:
@@ -332,9 +380,9 @@ def load_graph(path="graph_cache.json"):
 
 
 if __name__ == "__main__":
-    workspace = r'C:\5sem\PAG\lab3\drogi'
+    workspace = r'C:\uni\5sem\pagdane\drogi\PL_PZGiK_994_BDOT10k_0463__OT_SKJZ_L.shp'
     layer = 'PL_PZGiK_994_BDOT10k_0463__OT_SKJZ_L.shp'
-    cache_path = os.path.join(workspace, "graph_cache.json")
+    cache_path = os.path.join(os.path.dirname(__file__), "static\graph_cache.json")
 
 
     g = load_graph(cache_path)

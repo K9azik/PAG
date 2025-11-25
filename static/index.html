@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>PAG25z_proj1</title>
+  <link rel="stylesheet" href="leaflet/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="leaflet/leaflet.js"></script>
+</head>
+
+<body>
+  <div id="map"></div>
+  <div id="status-box" class="status-box">
+    <div class="status-text" id="status-text">Ładowanie...</div>
+    <div class="distance-text" id="distance-text" style="display: none;"></div>
+    <div class="progress-bar" id="progress-bar">
+      <div class="progress-fill"></div>
+    </div>
+  </div>
+
+  <script>
+    const map = L.map('map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    let markers = [];
+    let pathLayer = null;
+    const statusBox = document.getElementById('status-box');
+    const statusText = document.getElementById('status-text');
+    const distanceText = document.getElementById('distance-text');
+    const progressBar = document.getElementById('progress-bar');
+
+    fetch('/roads.geojson')
+      .then(response => {
+        if (!response.ok) throw new Error('Failed to load roads');
+        return response.json();
+      })
+      .then(data => {
+        L.geoJSON(data, {
+          style: {
+            color: '#ff7800',
+            weight: 5,
+            opacity: 0.65
+          }
+        }).addTo(map);
+        
+        map.fitBounds(L.geoJSON(data).getBounds());
+      })
+      .catch(error => showStatus('Błąd ładowania mapy', 'error'));
+
+    map.on('click', function(e) {
+      if (markers.length >= 2) {
+        clearMarkers();
+      }
+
+      const marker = L.marker(e.latlng).addTo(map);
+      markers.push(marker);
+
+      if (markers.length === 2) {
+        calculatePath();
+      }
+    });
+
+    function clearMarkers() {
+      markers.forEach(marker => map.removeLayer(marker));
+      markers = [];
+      
+      if (pathLayer) {
+        map.removeLayer(pathLayer);
+        pathLayer = null;
+      }
+    }
+
+    function showStatus(message, type = 'loading', distance = null) {
+      statusText.textContent = message;
+      statusBox.className = 'status-box show ' + type;
+      
+      if (distance !== null) {
+        distanceText.textContent = `Czas przejazdu: ${distance} sekund`;
+        distanceText.style.display = 'block';
+      } else {
+        distanceText.style.display = 'none';
+      }
+      
+      if (type === 'loading') {
+        progressBar.style.display = 'block';
+      } else {
+        progressBar.style.display = 'none';
+      }
+    }
+
+    function hideStatus() {
+      statusBox.classList.remove('show');
+    }
+
+    function calculatePath() {
+      const data = {
+        p1: {
+          lat: markers[0].getLatLng().lat,
+          lng: markers[0].getLatLng().lng
+        },
+        p2: {
+          lat: markers[1].getLatLng().lat,
+          lng: markers[1].getLatLng().lng
+        }
+      };
+
+      showStatus('Obliczanie trasy...', 'loading');
+      document.body.classList.add('calculating-cursor');
+
+      fetch('/process', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(err => {
+            throw new Error(err.message || 'Server error');
+          });
+        }
+        return response.json();
+      })
+      .then(result => {
+        if (pathLayer) {
+          map.removeLayer(pathLayer);
+        }
+        
+        // Store distance for later
+        const distance = result.distance;
+        
+        return fetch(result.geojson_url).then(response => {
+          if (!response.ok) throw new Error('Failed to load path');
+          return response.json().then(geojson => ({ geojson, distance }));
+        });
+      })
+      .then(({ geojson, distance }) => {
+        pathLayer = L.geoJSON(geojson, {
+          style: {
+            color: '#0000ff',
+            weight: 3,
+            opacity: 0.8
+          }
+        }).addTo(map);
+        map.fitBounds(pathLayer.getBounds());
+        
+        document.body.classList.remove('calculating-cursor');
+        showStatus('Trasa obliczona pomyślnie!', 'success', distance);
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        document.body.classList.remove('calculating-cursor');
+        showStatus('Błąd: ' + error.message, 'error');
+      });
+    }
+  </script>
+</body>
+</html>
