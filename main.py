@@ -3,10 +3,11 @@ import math
 import os
 import dotenv
 from arcpy import SpatialReference
+import heapq
 
 dotenv.load_dotenv()
 
-#####słownik do heurystyki#####
+#####słownik klasa drogi#####
 Vs = {
     "autostrada": 140,
     "droga ekspresowa": 130,
@@ -17,7 +18,6 @@ Vs = {
     "droga wewnętrzna": 30,
     "inna": 40
 }
-
 
 class Node:
     def __init__(self, node_id, x, y):
@@ -131,53 +131,49 @@ class GraphCreator:
             print(f"For point 2: Node {closest_to_p2} at ({node2.x}, {node2.y})")
         
         return closest_to_p1, closest_to_p2
-    
-def dijkstra(graph, start_id, end_id):
-    # init
-    S = set()  # odwiedzone
-    Q = set()  # do sprawdzenia
-    d = {}  # dystanse
-    p = {}  # poprzednicy
-    pe = {}  # poprzednie krawędzie
-    neighbor_count = 0  # licznik sąsiadów
 
-    # ustaw odległości początkowe
+def dijkstra(graph, start_id, end_id):
+
+    Q = []
+    d = {}
+    p = {}
+    pe = {}
+
+    visited_nodes = 0
+    visited_edges = 0
+
     for node_id in graph.nodes:
         d[node_id] = math.inf
         p[node_id] = None
         pe[node_id] = None
 
     d[start_id] = 0
-    Q.add(start_id)
+    heapq.heappush(Q, (0, start_id))
 
-    # --- Pętla główna ---
     while Q:
-        # wybierz wierzchołek o najmniejszym d[v]
-        v = min(Q, key=lambda node_id: d[node_id])
-        Q.remove(v)
+        current_dist, v = heapq.heappop(Q)
+
+        if current_dist > d[v]:
+            continue
+
+        visited_nodes += 1
 
         if v == end_id:
             break
 
         v_node = graph.nodes[v]
 
-        # przejrzyj wszystkich sąsiadów
         for edge, u_node in v_node.edges:
-            neighbor_count += 1
+            visited_edges += 1
             u = u_node.id
-            if u in S:
-                continue
-
             new_dist = d[v] + edge.cost
+
             if new_dist < d[u]:
                 d[u] = new_dist
                 p[u] = v
                 pe[u] = edge
-                Q.add(u)
+                heapq.heappush(Q, (new_dist, u))
 
-        S.add(v)
-
-    # --- Odtworzenie ścieżki ---
     path_nodes = []
     path_edges = []
 
@@ -185,66 +181,37 @@ def dijkstra(graph, start_id, end_id):
         node = end_id
         while node is not None:
             path_nodes.insert(0, node)
-            edge = pe[node]
+            edge = pe.get(node)
             if edge is not None:
                 path_edges.insert(0, edge.id)
-            node = p[node]
+            node = p.get(node)
     else:
-        print("Brak połączenia między wierzchołkami.")
-        return None, None, None, None
+        print(f"Brak połączenia między wierzchołkami {start_id}, {end_id}.")
+        return None, None, math.inf, 0, None
 
-    # --- Wyniki ---
-    # print(f"Najkrotsza odleglosc od {start_id} do {end_id}: {d[end_id]:.2f}")
-    # print(f"Sciezka po wierzcholkach: {path_nodes}")
-    # print(f"Krawedzie trasy: {path_edges}")
-    # print(f"Liczba odwiedzonych wierzcholkow: {len(S)}")
-    # print(f"Liczba przejrzanych sasiadow: {neighbor_count}")
-
-    return path_nodes, path_edges, d[end_id], len(S), neighbor_count
+    return path_nodes, path_edges, d[end_id], visited_nodes, visited_edges
 
 
 def astar(graph, start_id, end_id):
 
-    def heuristic(n1, n2, prev_edge=None):
+    VMAX = max(Vs.values()) / 3.6
+    def heuristic(n1, n2):
         dx = n1.x - n2.x
         dy = n1.y - n2.y
-        distance = math.sqrt(dx * dx + dy * dy)
+        distance = abs(dx) + abs(dy)
 
-        vmax = max(Vs.values()) / 3.6
-        time = distance / vmax
+        time = distance / VMAX
 
-        ####koszt (czas) wzrasta przy skrecaniu w zaleznosci od kąta
-        turn_penalty = 0
-        if prev_edge is not None:
-            vx1 = prev_edge.end.x - prev_edge.start.x
-            vy1 = prev_edge.end.y - prev_edge.start.y
-            vx2 = n2.x - n1.x
-            vy2 = n2.y - n1.y
+        return time
 
-            # iloczyn skalarny i dlugosci wektorow
-            dot = vx1 * vx2 + vy1 * vy2
-            mag1 = math.sqrt(vx1 ** 2 + vy1 ** 2)
-            mag2 = math.sqrt(vx2 ** 2 + vy2 ** 2)
-            if mag1 > 0 and mag2 > 0:
-                angle = math.degrees(math.acos(max(-1, min(1, dot / (mag1 * mag2)))))
-                turn_penalty = (angle / 180) * time
-
-        ####koszt za klase drogi
-        road_penalty = 0
-        if prev_edge is not None:
-            v_edge = Vs.get(prev_edge.road_class, 40) / 3.6
-            road_penalty = (1 - v_edge / vmax) * time
-
-        return time + turn_penalty + road_penalty
-
-
-    S = set()  # odwiedzone
-    Q = set()  # do sprawdzenia
-    g_cost = {}  # koszt od startu do danego wierzchołka
-    f_cost = {}  # koszt całkowity (g + h)
-    p = {}  # poprzednicy
-    pe = {}  # poprzednie krawędzie
-    neighbor_count = 0
+    Q = []
+    g_cost = {}
+    f_cost = {}
+    p = {}
+    pe = {}
+    visited_nodes = 0
+    visited_edges = 0
+    end_node = graph.nodes[end_id]
 
     for node_id in graph.nodes:
         g_cost[node_id] = math.inf
@@ -253,38 +220,38 @@ def astar(graph, start_id, end_id):
         pe[node_id] = None
 
     start_node = graph.nodes[start_id]
-    end_node = graph.nodes[end_id]
-
     g_cost[start_id] = 0
-    f_cost[start_id] = heuristic(start_node, end_node, None)
-    Q.add(start_id)
+
+    f_cost[start_id] = heuristic(start_node, end_node)
+    heapq.heappush(Q, (f_cost[start_id], start_id))
 
     while Q:
-        # wybierz wierzchołek o najmniejszym f_cost
-        v = min(Q, key=lambda node_id: f_cost[node_id])
-        Q.remove(v)
+        current_cost, v = heapq.heappop(Q)
+
+        if current_cost > g_cost.get(v, math.inf) + heuristic(graph.nodes[v], end_node):
+            continue
+
+        visited_nodes += 1
 
         if v == end_id:
             break
 
         v_node = graph.nodes[v]
-        S.add(v)
 
-        # przeglądaj sąsiadów
         for edge, u_node in v_node.edges:
-            neighbor_count += 1
+            visited_edges += 1
             u = u_node.id
 
-            if u in S:
-                continue
-
             tentative_g = g_cost[v] + edge.cost
-            if tentative_g < g_cost[u]:
+            if tentative_g < g_cost.get(u, math.inf):
                 g_cost[u] = tentative_g
-                f_cost[u] = tentative_g + heuristic(u_node, end_node, pe[v])
+                h_cost = heuristic(u_node, end_node)
+                f_cost[u] = tentative_g + h_cost
+
                 p[u] = v
                 pe[u] = edge
-                Q.add(u)
+
+                heapq.heappush(Q, (f_cost[u], u))
 
     path_nodes = []
     path_edges = []
@@ -298,18 +265,10 @@ def astar(graph, start_id, end_id):
                 path_edges.insert(0, edge.id)
             node = p[node]
     else:
-        print("Brak połączenia między wierzchołkami.")
+        print(f"Brak połączenia między wierzchołkami {start_id}, {end_id}.")
         return None, None, None, None, None
 
-    # --- Wyniki ---
-    print(f"[A*] Najkrotsza odleglosc od {start_id} do {end_id}: {g_cost[end_id]:.2f}")
-    print(f"[A*] Sciezka po wierzcholkach: {path_nodes}")
-    print(f"[A*] Krawedzie trasy: {path_edges}")
-    print(f"[A*] Liczba odwiedzonych wierzcholkow: {len(S)}")
-    print(f"[A*] Liczba przejrzanych sasiadow: {neighbor_count}")
-
-    return path_nodes, path_edges, g_cost[end_id], len(S), neighbor_count
-
+    return path_nodes, path_edges, g_cost[end_id], visited_nodes, visited_edges
 
 def create_graph(workspace, layer):
     gc = GraphCreator()
@@ -378,7 +337,6 @@ def load_graph(path="graph_cache.json"):
     return g
 
 
-
 if __name__ == "__main__":
     workspace = r'C:\uni\5sem\pagdane\drogi\PL_PZGiK_994_BDOT10k_0463__OT_SKJZ_L.shp'
     layer = 'PL_PZGiK_994_BDOT10k_0463__OT_SKJZ_L.shp'
@@ -405,5 +363,4 @@ if __name__ == "__main__":
     arcpy.management.SelectLayerByAttribute(layer_obj, "NEW_SELECTION", fid_query)
     '''
 
-#gdyby ktos sie zapytal skad wzielismy predkosci do heurystyki:
 #https://sip.lex.pl/akty-prawne/dzu-dziennik-ustaw/przepisy-techniczno-budowlane-dotyczace-drog-publicznych-19262089/dz-3-roz-1
