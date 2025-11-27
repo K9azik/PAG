@@ -198,7 +198,7 @@ def astar(graph, start_id, end_id):
     def heuristic(n1, n2):
         dx = n1.x - n2.x
         dy = n1.y - n2.y
-        distance = abs(dx) + abs(dy)
+        distance = math.sqrt(dx * dx + dy * dy)
 
         time = distance / VMAX
 

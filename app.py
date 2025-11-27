@@ -26,8 +26,7 @@ def process():
     point2 = (float(data['p2']['lng']), float(data['p2']['lat']))
     
     start_node, end_node = runner.find_closest_points(point1, point2)
-    
-    # Sprawdź czy punkty są takie same
+
     if start_node == end_node:
         return jsonify({
             "status": "error",
