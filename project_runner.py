@@ -5,7 +5,6 @@ from main import GraphCreator, create_graph, load_graph, save_graph, astar
 
 def convert_roads_geojson(workspace, workspace_name, output_path):
     if os.path.exists(output_path):
-        print(f"GeoJSON already exists: {output_path}")
         return
     
     input_path = os.path.join(workspace, workspace_name)
@@ -16,15 +15,12 @@ def convert_roads_geojson(workspace, workspace_name, output_path):
         geoJSON="GEOJSON",
         outputToWGS84="WGS84",
     )
-    print(f"GeoJSON created: {output_path}")
 
 def save_to_geojson(workspace, layer, path_edges, output_path):  
     if os.path.exists(output_path):
         os.remove(output_path)
     
-    # Sprawdź czy są jakieś krawędzie
     if not path_edges:
-        # Utwórz pusty GeoJSON
         empty_geojson = {
             "type": "FeatureCollection",
             "features": []
@@ -71,8 +67,6 @@ def format_time(seconds):
 
 class Runner:
     def __init__(self):
-        dotenv.load_dotenv()
-        
         self.gc = GraphCreator()
         self.workspace = r'C:\uni\5sem\pagdane\drogi\PL_PZGiK_994_BDOT10k_0463__OT_SKJZ_L.shp'
         self.workspace_name = 'PL_PZGiK_994_BDOT10k_0463__OT_SKJZ_L.shp'

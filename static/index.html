@@ -148,7 +148,7 @@
         map.fitBounds(pathLayer.getBounds());
         
         document.body.classList.remove('calculating-cursor');
-        showStatus('Trasa obliczona pomyślnie!', 'success', distance);
+        showStatus('Trasa obliczona pomyślnie', 'success', distance);
       })
       .catch(error => {
         console.error('Error:', error);

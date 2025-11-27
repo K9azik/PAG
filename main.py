@@ -1,11 +1,8 @@
 import arcpy
 import math
 import os
-import dotenv
 from arcpy import SpatialReference
 import heapq
-
-dotenv.load_dotenv()
 
 #####słownik klasa drogi#####
 Vs = {
@@ -19,12 +16,13 @@ Vs = {
     "inna": 40
 }
 
+#=================================================#
 class Node:
     def __init__(self, node_id, x, y):
-        self.id = node_id  # id węzła
-        self.x = x  # współrzędna x
-        self.y = y  # współrzędna y
-        self.edges = []  # lista krawędzi (krawędź, wierzchołek)
+        self.id = node_id  
+        self.x = x  
+        self.y = y  
+        self.edges = []  
 
     def __repr__(self):
         eids = ",".join([str(e.id) for e, v in self.edges])
@@ -33,10 +31,10 @@ class Node:
 
 class Edge:
     def __init__(self, edge_id, cost, start, end, road_class):
-        self.id = edge_id  # nr krawędzi
-        self.cost = cost  # waga/długość
-        self.start = start  # początek
-        self.end = end  # koniec
+        self.id = edge_id  
+        self.cost = cost  
+        self.start = start  
+        self.end = end  
         self.road_class = road_class
 
     def __repr__(self):
@@ -47,8 +45,8 @@ class Edge:
 
 class Graph:
     def __init__(self):
-        self.edges = {}  # edge_id -> Edge
-        self.nodes = {}  # node_id -> Node
+        self.edges = {}  
+        self.nodes = {}  
 
     def __repr__(self):
         ns = ",".join([str(n) for n in self.nodes.values()])  
@@ -58,9 +56,9 @@ class Graph:
 
 class GraphCreator:
     def __init__(self):
-        self.graph = Graph()  # graf
-        self.new_id = 0  # licznik id
-        self.index = {}  # indeks punktów
+        self.graph = Graph()  
+        self.new_id = 0  
+        self.index = {}  
 
     def getNewId(self):
         self.new_id = self.new_id + 1
@@ -78,6 +76,9 @@ class GraphCreator:
         n2 = self.newNode(p2)
         e = Edge(id, length, n1, n2, road_class)
         self.graph.edges[id] = e
+#=================================================#
+#     ©contribution: dr inż. Jacek Marciniak      #
+#=================================================#
 
         # tylko jeśli droga przejezdna w danym kierunku
         if direction in (0, 1):
@@ -311,20 +312,17 @@ def save_graph(graph, path="graph_cache.json"):
 
 
 def load_graph(path="graph_cache.json"):
-    if not os.path.exists(path):
-        print("Plik grafu nie istnieje – zostanie utworzony nowy.")
-        return None
 
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     g = Graph()
-    # Odtwarzanie węzłów
+    
     for nid, ndata in data["nodes"].items():
         n = Node(int(nid), ndata["x"], ndata["y"])
         g.nodes[n.id] = n
 
-    # Odtwarzanie krawędzi
+    
     for edata in data["edges"]:
         start = g.nodes[edata["start"]]
         end = g.nodes[edata["end"]]
@@ -352,15 +350,3 @@ if __name__ == "__main__":
     a = astar(g, 1000, 6767)
     path_nodes, path_edges, _, _, _ = a
 
-    ###do testowania w arcgisie
-    '''
-    fid_query = f"FID IN ({','.join(map(str, path_edges))})"
-    aprx = arcpy.mp.ArcGISProject("CURRENT")
-    m = aprx.activeMap
-    m.clearSelection()
-
-    layer_obj = layer
-    arcpy.management.SelectLayerByAttribute(layer_obj, "NEW_SELECTION", fid_query)
-    '''
-
-#https://sip.lex.pl/akty-prawne/dzu-dziennik-ustaw/przepisy-techniczno-budowlane-dotyczace-drog-publicznych-19262089/dz-3-roz-1

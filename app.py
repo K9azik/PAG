@@ -12,7 +12,6 @@ runner = None
 def initialize_app():
     global runner
     runner = Runner()
-    print("Application initialized successfully")
 
 @app.route('/')
 def serve_index():
