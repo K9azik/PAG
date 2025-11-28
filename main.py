@@ -8,11 +8,11 @@ import heapq
 Vs = {
     "autostrada": 140,
     "droga ekspresowa": 130,
-    "droga główna ruchu przyspieszonego": 70,
-    "droga główna": 60,
-    "droga zbiorcza": 50,
-    "droga lokalna": 40,
-    "droga wewnętrzna": 30,
+    "droga główna ruchu przyspieszonego": 110,
+    "droga główna": 100,
+    "droga zbiorcza": 80,
+    "droga lokalna": 60,
+    "droga wewnętrzna": 40,
     "inna": 40
 }
 
